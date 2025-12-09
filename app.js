@@ -171,22 +171,35 @@ const Button = ({ onClick, children, variant = "primary", className = "", disabl
     );
 };
 
-const BitVisualizer = ({ binaryString }) => {
+const BitVisualizer = ({ binaryString, isDarkBg = false }) => {
     if (!binaryString) return null;
-    const bits = binaryString.replace(/\s/g, '').split('');
+    // スペース区切りでバイトごとに分割 (例: "11100011 10000001" -> ["11100011", "10000001"])
+    const bytes = binaryString.trim().split(/\s+/);
+    
     return (
-        <div className="flex flex-wrap gap-1 max-w-full">
-            {bits.map((bit, idx) => (
-                <div 
-                    key={idx}
-                    className={`
-                        w-6 h-8 flex items-center justify-center rounded text-xs font-mono font-bold transition-all
-                        ${bit === '1' 
-                            ? 'bg-brand-500 text-white shadow-sm scale-100' 
-                            : 'bg-slate-100 text-slate-300 border border-slate-200 scale-95'}
-                    `}
-                >
-                    {bit}
+        <div className="flex flex-col gap-2 items-start">
+            {bytes.map((byteStr, rowIdx) => (
+                <div key={rowIdx} className="flex items-center gap-3">
+                    <span className={`text-[10px] font-mono w-4 text-right select-none ${isDarkBg ? 'text-slate-500' : 'text-slate-400'}`}>
+                        {rowIdx + 1}
+                    </span>
+                    <div className="flex gap-1">
+                        {byteStr.split('').map((bit, colIdx) => (
+                            <div 
+                                key={colIdx}
+                                className={`
+                                    w-7 h-9 flex items-center justify-center rounded text-sm font-mono font-bold transition-all
+                                    ${bit === '1' 
+                                        ? 'bg-brand-500 text-white shadow-sm' 
+                                        : (isDarkBg 
+                                            ? 'bg-slate-800 text-slate-600 border border-slate-700' 
+                                            : 'bg-white text-slate-300 border border-slate-200')}
+                                `}
+                            >
+                                {bit}
+                            </div>
+                        ))}
+                    </div>
                 </div>
             ))}
         </div>
@@ -415,7 +428,7 @@ const CharacterDetailCard = ({ item, fontClass }) => (
                         </div>
                     </div>
                     <div className="bg-slate-900 rounded-lg p-4 overflow-x-auto shadow-inner">
-                        <BitVisualizer binaryString={item.utf8.binary} />
+                        <BitVisualizer binaryString={item.utf8.binary} isDarkBg={true} />
                     </div>
                 </div>
 
@@ -443,11 +456,7 @@ const CharacterDetailCard = ({ item, fontClass }) => (
                     
                     {item.sjis.isValid ? (
                         <div className="bg-orange-50 rounded-lg p-4 overflow-x-auto border border-orange-100">
-                            <div className="flex gap-2 text-slate-700 font-mono font-bold">
-                                {item.sjis.binary.split(' ').map((b, i) => (
-                                    <span key={i} className="bg-white px-1 rounded shadow-sm">{b}</span>
-                                ))}
-                            </div>
+                            <BitVisualizer binaryString={item.sjis.binary} isDarkBg={false} />
                         </div>
                     ) : (
                         <div className="bg-slate-100 rounded-lg p-4 text-center border-2 border-dashed border-slate-300">
