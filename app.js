@@ -212,6 +212,95 @@ const HexBadge = ({ hex }) => (
     </span>
 );
 
+const MojibakeSimulator = ({ input }) => {
+    const [utf8ToSjis, setUtf8ToSjis] = useState('');
+    const [sjisToUtf8, setSjisToUtf8] = useState('');
+
+    useEffect(() => {
+        if (!input || !window.Encoding) return;
+
+        // 1. UTF-8で保存されたファイルを、Shift-JISで開いた場合
+        const utf8Bytes = toUTF8Array(input);
+        try {
+            const garbled = window.Encoding.convert(utf8Bytes, {
+                to: 'UNICODE',
+                from: 'SJIS',
+                type: 'string'
+            });
+            setUtf8ToSjis(garbled);
+        } catch (e) {
+            setUtf8ToSjis('（変換エラー）');
+        }
+
+        // 2. Shift-JISで保存されたファイルを、UTF-8で開いた場合
+        const sjisBytes = toSJISArray(input);
+        if (sjisBytes && sjisBytes.length > 0) {
+            try {
+                const garbled = window.Encoding.convert(sjisBytes, {
+                    to: 'UNICODE',
+                    from: 'UTF8',
+                    type: 'string'
+                });
+                setSjisToUtf8(garbled);
+            } catch (e) {
+                setSjisToUtf8('（変換エラー）');
+            }
+        } else {
+             setSjisToUtf8('（Shift-JIS非対応）');
+        }
+
+    }, [input]);
+
+    return (
+        <Card title="体験！文字化けシミュレーター" className="border-red-100 bg-red-50/10">
+            <div className="mb-4 text-sm text-slate-600">
+                <p>「文字化け」は、保存時のルール（文字コード）と、開く時のルールが食い違うことで発生します。下のボックスで結果を確認してみよう。</p>
+            </div>
+            <div className="grid md:grid-cols-2 gap-6">
+                {/* Case 1 */}
+                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm relative overflow-hidden group">
+                    <div className="absolute top-0 right-0 bg-slate-100 text-[10px] px-2 py-1 text-slate-500 font-mono rounded-bl">Scenario A</div>
+                    <h4 className="font-bold text-slate-700 mb-1 flex items-center gap-2">
+                        <span className="w-6 h-6 rounded bg-brand-100 text-brand-600 flex items-center justify-center text-xs"><i className="fa-solid fa-file-pen"></i></span>
+                        UTF-8 保存
+                        <i className="fa-solid fa-arrow-right text-slate-300 text-xs"></i>
+                        <span className="w-6 h-6 rounded bg-orange-100 text-orange-600 flex items-center justify-center text-xs"><i className="fa-solid fa-glasses"></i></span>
+                        Shift-JIS 表示
+                    </h4>
+                    <p className="text-xs text-slate-400 mb-3">最近のWebサイトを古いソフトで開いた時など</p>
+                    
+                    <div className="bg-slate-900 rounded-lg p-4 relative">
+                        <div className="text-slate-400 text-xs mb-1 font-mono">結果:</div>
+                        <div className="text-yellow-400 font-mono text-lg break-all min-h-[2rem]">
+                            {utf8ToSjis}
+                        </div>
+                    </div>
+                </div>
+
+                {/* Case 2 */}
+                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm relative overflow-hidden group">
+                    <div className="absolute top-0 right-0 bg-slate-100 text-[10px] px-2 py-1 text-slate-500 font-mono rounded-bl">Scenario B</div>
+                    <h4 className="font-bold text-slate-700 mb-1 flex items-center gap-2">
+                         <span className="w-6 h-6 rounded bg-orange-100 text-orange-600 flex items-center justify-center text-xs"><i className="fa-solid fa-file-pen"></i></span>
+                        Shift-JIS 保存
+                        <i className="fa-solid fa-arrow-right text-slate-300 text-xs"></i>
+                         <span className="w-6 h-6 rounded bg-brand-100 text-brand-600 flex items-center justify-center text-xs"><i className="fa-solid fa-glasses"></i></span>
+                        UTF-8 表示
+                    </h4>
+                    <p className="text-xs text-slate-400 mb-3">古いメモ帳のファイルをブラウザで開いた時など</p>
+
+                    <div className="bg-slate-900 rounded-lg p-4 relative">
+                        <div className="text-slate-400 text-xs mb-1 font-mono">結果:</div>
+                        <div className="text-yellow-400 font-mono text-lg break-all min-h-[2rem]">
+                            {sjisToUtf8}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </Card>
+    );
+};
+
 // ==========================================
 // 5. Main Application Logic
 // ==========================================
@@ -269,10 +358,7 @@ const ConverterView = () => {
     const [selectedFont, setSelectedFont] = useState(FONTS[0]);
 
     useEffect(() => {
-        // Encodingライブラリのロード待ちなどを考慮し、少し遅延させるか、
-        // ユーザー入力のたびに再計算する
         setAnalysis(analyzeText(input));
-        // 入力内容が変わったら選択位置を先頭に戻す（長さが変わった場合など）
         if (input.length === 0) setSelectedIndex(-1);
         else if (selectedIndex >= input.length) setSelectedIndex(0);
         else if (selectedIndex === -1 && input.length > 0) setSelectedIndex(0);
@@ -387,6 +473,11 @@ const ConverterView = () => {
                         </Card>
 
                         <AITutorPanel input={input} selectedChar={selectedCharData?.char} />
+                    </div>
+                    
+                    {/* Mojibake Simulator (Full width at bottom) */}
+                    <div className="lg:col-span-3">
+                        <MojibakeSimulator input={input} />
                     </div>
                 </div>
             ) : (
