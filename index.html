@@ -36,13 +36,12 @@
     <!-- Shift-JIS Encoding Library -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/encoding-japanese/2.0.0/encoding.min.js"></script>
 
-    <!-- React & Babel -->
-    <!-- Fixed importmap: Removed conflicting react-dom v19 entry. Ensured react and react-dom match v18. -->
+    <!-- React 19 & Babel -->
     <script type="importmap">
 {
   "imports": {
-    "react": "https://esm.sh/react@18.2.0",
-    "react-dom/client": "https://esm.sh/react-dom@18.2.0/client?deps=react@18.2.0",
+    "react": "https://esm.sh/react@19.0.0?dev",
+    "react-dom/client": "https://esm.sh/react-dom@19.0.0/client?dev",
     "@google/genai": "https://esm.sh/@google/genai",
     "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.1/"
   }
@@ -56,17 +55,20 @@
             font-family: 'Noto Sans JP', sans-serif;
             background-color: #f8fafc;
         }
-        .binary-grid {
-            display: grid;
-            grid-template-columns: repeat(8, 1fr);
-            gap: 2px;
+        /* Custom Scrollbar for horizontal scrolling areas */
+        .custom-scrollbar::-webkit-scrollbar {
+            height: 8px;
         }
-        .scrollbar-hide::-webkit-scrollbar {
-            display: none;
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #f1f5f9;
+            border-radius: 4px;
         }
-        .scrollbar-hide {
-            -ms-overflow-style: none;
-            scrollbar-width: none;
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
         }
         #error-display {
             display: none;
@@ -95,7 +97,6 @@
     </script>
 
     <!-- Main Application Logic -->
-    <!-- data-type="module" is critical for Babel to handle ES6 imports inside the script -->
     <script type="text/babel" data-type="module" src="./app.js"></script>
 </body>
 </html>
