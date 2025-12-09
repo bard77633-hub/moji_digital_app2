@@ -1,0 +1,5 @@
+{
+  "name": "デジ文字ラボ (DigiMoji Lab)",
+  "description": "高校情報Ⅰ「文字のデジタル化」単元用学習アプリ。文字コード（UTF-8/Shift-JIS）の仕組み、バイナリ変換、フォントの違いを直感的に学べるツールです。",
+  "requestFramePermissions": []
+}
