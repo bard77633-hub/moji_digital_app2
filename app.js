@@ -1,9 +1,270 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
-import { analyzeText } from './utils/encoding.js';
-import { askAITeacher, generateQuiz } from './services/gemini.js';
-import { Card, Button, BitVisualizer, HexBadge } from './components/ui.js';
-import { FONTS, INITIAL_QUIZ_DATA, API_KEY } from './constants.js';
+import { GoogleGenAI } from "@google/genai";
+
+// ==========================================
+// 1. Constants (formerly constants.js)
+// ==========================================
+
+// ブラウザ環境でのクラッシュを防ぐため、process.env が存在しない場合のフォールバックを追加
+const API_KEY = (typeof process !== 'undefined' && process.env && process.env.API_KEY) ? process.env.API_KEY : '';
+
+const FONTS = [
+    { name: 'ゴシック体', family: 'font-sans' },
+    { name: '明朝体', family: 'font-serif' },
+    { name: '手書き風', family: 'font-hand' },
+    { name: '等幅', family: 'font-mono' },
+];
+
+const INITIAL_QUIZ_DATA = [
+    {
+        id: 1,
+        question: "次のバイナリ `01000001` (UTF-8) が表す文字は？",
+        options: ["A", "a", "1", "B"],
+        answer: "A",
+        explanation: "UTF-8（ASCII互換）では、`01000001`は16進数で`41`となり、これは「A」を表します。"
+    },
+    {
+        id: 2,
+        question: "「あ」のUTF-8表現はどれ？",
+        options: ["E3 81 82", "82 A0", "30 42", "41"],
+        answer: "E3 81 82",
+        explanation: "UTF-8では日本語の多くは3バイトで表現されます。「あ」は `E3 81 82` です。`82 A0` はShift-JISです。"
+    }
+];
+
+// ==========================================
+// 2. Utils (formerly utils/encoding.js)
+// ==========================================
+
+/**
+ * 文字列をUTF-8のバイト配列に変換
+ */
+const toUTF8Array = (str) => {
+    const encoder = new TextEncoder();
+    return Array.from(encoder.encode(str));
+};
+
+/**
+ * 文字列をShift-JISのバイト配列に変換
+ * (encoding-japanese ライブラリを使用)
+ */
+const toSJISArray = (str) => {
+    // グローバルなEncodingオブジェクトを確認
+    const EncodingLib = window.Encoding;
+    if (!EncodingLib) return [];
+    
+    // Unicode -> SJIS
+    const unicodeArray = EncodingLib.stringToCode(str);
+    const sjisArray = EncodingLib.convert(unicodeArray, {
+        to: 'SJIS',
+        from: 'UNICODE'
+    });
+    return sjisArray;
+};
+
+/**
+ * バイト配列を16進数文字列に変換 (例: [227, 129, 130] -> "E3 81 82")
+ */
+const toHexString = (byteArray) => {
+    return byteArray.map(b => b.toString(16).toUpperCase().padStart(2, '0')).join(' ');
+};
+
+/**
+ * バイト配列を2進数文字列に変換 (例: [65] -> "01000001")
+ */
+const toBinaryString = (byteArray) => {
+    return byteArray.map(b => b.toString(2).padStart(8, '0')).join(' ');
+};
+
+/**
+ * 1文字ごとの詳細データを生成する
+ */
+const analyzeText = (text) => {
+    if (!text) return [];
+    
+    // 文字列を1文字ずつ分割（サロゲートペア対応）
+    const chars = Array.from(text);
+    
+    return chars.map(char => {
+        const utf8 = toUTF8Array(char);
+        const sjis = toSJISArray(char);
+        
+        return {
+            char: char,
+            codePoint: 'U+' + char.codePointAt(0).toString(16).toUpperCase().padStart(4, '0'),
+            utf8: {
+                bytes: utf8,
+                hex: toHexString(utf8),
+                binary: toBinaryString(utf8)
+            },
+            sjis: {
+                bytes: sjis,
+                hex: toHexString(sjis),
+                binary: toBinaryString(sjis)
+            }
+        };
+    });
+};
+
+// ==========================================
+// 3. Services (formerly services/gemini.js)
+// ==========================================
+
+let aiClient = null;
+
+const getClient = () => {
+    if (!API_KEY) {
+        return null;
+    }
+    if (!aiClient) {
+        aiClient = new GoogleGenAI({ apiKey: API_KEY });
+    }
+    return aiClient;
+};
+
+/**
+ * AI先生に文字コードについて質問する
+ */
+const askAITeacher = async (question, context = "") => {
+    const client = getClient();
+    if (!client) {
+        throw new Error("APIキーが設定されていません。");
+    }
+
+    try {
+        const prompt = `
+        あなたは高校の「情報I」の先生です。生徒からの質問に、親しみやすく、わかりやすく答えてください。
+        専門用語を使う場合は、必ず簡単な例え話を入れてください。
+        
+        文脈（現在アプリで表示している内容）: ${context}
+        
+        生徒の質問: ${question}
+        
+        回答は簡潔に、300文字以内でお願いします。
+        `;
+
+        const response = await client.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+        });
+
+        return response.text;
+    } catch (error) {
+        console.error("Gemini API Error:", error);
+        throw new Error("AI先生への接続に失敗しました。");
+    }
+};
+
+/**
+ * クイズを生成する
+ */
+const generateQuiz = async () => {
+    const client = getClient();
+    if (!client) {
+        // Fallback is handled in the UI
+        throw new Error("API_KEY_MISSING");
+    }
+
+    try {
+        const prompt = `
+        高校情報I「文字のデジタル化」に関する4択クイズを1問作成してください。
+        以下のJSON形式のみを返してください。Markdownの装飾は不要です。
+        
+        {
+          "question": "問題文",
+          "options": ["選択肢1", "選択肢2", "選択肢3", "選択肢4"],
+          "answer": "正解の選択肢文字列",
+          "explanation": "解説"
+        }
+        
+        テーマ例：ASCIIコード、UTF-8とShift-JISの違い、ビットとバイトの関係、文字化けの原因。
+        `;
+
+        const response = await client.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+            config: {
+                responseMimeType: "application/json"
+            }
+        });
+
+        return JSON.parse(response.text);
+    } catch (error) {
+        console.error("Quiz Gen Error:", error);
+        return null;
+    }
+};
+
+// ==========================================
+// 4. Components (formerly components/ui.js)
+// ==========================================
+
+const Card = ({ children, className = "", title }) => (
+    <div className={`bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden ${className}`}>
+        {title && (
+            <div className="bg-slate-50 px-4 py-3 border-b border-slate-100">
+                <h3 className="text-sm font-bold text-slate-700 uppercase tracking-wider">{title}</h3>
+            </div>
+        )}
+        <div className="p-4 md:p-6">
+            {children}
+        </div>
+    </div>
+);
+
+const Button = ({ onClick, children, variant = "primary", className = "", disabled = false }) => {
+    const base = "px-4 py-2 rounded-lg font-medium transition-all duration-200 flex items-center gap-2 justify-center";
+    const variants = {
+        primary: "bg-brand-600 text-white hover:bg-brand-500 shadow-md shadow-brand-500/20 disabled:opacity-50 disabled:cursor-not-allowed",
+        secondary: "bg-white text-slate-700 border border-slate-300 hover:bg-slate-50 hover:text-brand-600",
+        ghost: "text-slate-500 hover:text-brand-600 hover:bg-brand-50",
+    };
+    
+    return (
+        <button 
+            onClick={onClick} 
+            className={`${base} ${variants[variant]} ${className}`}
+            disabled={disabled}
+        >
+            {children}
+        </button>
+    );
+};
+
+const BitVisualizer = ({ binaryString }) => {
+    // Remove spaces and split
+    const bits = binaryString.replace(/\s/g, '').split('');
+    
+    return (
+        <div className="flex flex-wrap gap-1 max-w-full">
+            {bits.map((bit, idx) => (
+                <div 
+                    key={idx}
+                    className={`
+                        w-6 h-8 md:w-8 md:h-10 flex items-center justify-center rounded text-xs font-mono font-bold
+                        ${bit === '1' 
+                            ? 'bg-brand-500 text-white shadow-sm' 
+                            : 'bg-slate-100 text-slate-400 border border-slate-200'}
+                    `}
+                    title={`Bit ${idx}`}
+                >
+                    {bit}
+                </div>
+            ))}
+        </div>
+    );
+};
+
+const HexBadge = ({ hex }) => (
+    <span className="font-mono bg-slate-800 text-yellow-400 px-2 py-1 rounded text-sm tracking-wider">
+        {hex}
+    </span>
+);
+
+// ==========================================
+// 5. Main Application Logic
+// ==========================================
 
 const App = () => {
     const [view, setView] = useState('converter'); // converter, quiz, about
