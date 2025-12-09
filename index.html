@@ -37,16 +37,18 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/encoding-japanese/2.0.0/encoding.min.js"></script>
 
     <!-- React & Babel -->
+    <!-- Fixed importmap: Removed conflicting react-dom v19 entry. Ensured react and react-dom match v18. -->
     <script type="importmap">
 {
   "imports": {
     "react": "https://esm.sh/react@18.2.0",
-    "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+    "react-dom/client": "https://esm.sh/react-dom@18.2.0/client?deps=react@18.2.0",
     "@google/genai": "https://esm.sh/@google/genai",
     "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.1/"
   }
 }
 </script>
+    <!-- Babel Standalone -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     
     <style>
@@ -66,13 +68,34 @@
             -ms-overflow-style: none;
             scrollbar-width: none;
         }
+        #error-display {
+            display: none;
+            padding: 20px;
+            background: #fee2e2;
+            color: #991b1b;
+            border: 1px solid #f87171;
+            margin: 20px;
+            border-radius: 8px;
+            font-family: monospace;
+        }
     </style>
 </head>
 <body>
     <div id="root"></div>
+    <div id="error-display"></div>
+
+    <!-- Error Handler -->
+    <script>
+        window.addEventListener('error', function(e) {
+            const errorDiv = document.getElementById('error-display');
+            errorDiv.style.display = 'block';
+            errorDiv.innerText = 'Application Error: ' + e.message;
+            console.error(e);
+        });
+    </script>
 
     <!-- Main Application Logic -->
-    <!-- All code is bundled in app.js to ensure Babel transpiles JSX correctly in the browser -->
+    <!-- data-type="module" is critical for Babel to handle ES6 imports inside the script -->
     <script type="text/babel" data-type="module" src="./app.js"></script>
 </body>
 </html>
