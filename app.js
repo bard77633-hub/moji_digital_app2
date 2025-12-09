@@ -209,12 +209,10 @@ const HexBadge = ({ hex }) => (
 const MojibakeSimulator = ({ input }) => {
     const [saveMode, setSaveMode] = useState('UTF8'); // 'UTF8' | 'SJIS'
     const [openMode, setOpenMode] = useState('SJIS'); // 'UTF8' | 'SJIS'
-    const [savedBytes, setSavedBytes] = useState([]);
-    const [resultText, setResultText] = useState('');
 
-    // 入力 or モード変更時に再計算
-    useEffect(() => {
-        if (!input || !window.Encoding) return;
+    // シミュレーション結果の計算（レンダリング時に同期的に処理）
+    const { savedBytes, resultText } = useMemo(() => {
+        if (!input || !window.Encoding) return { savedBytes: [], resultText: '' };
 
         // 1. 保存プロセス (文字列 -> バイト列)
         let bytes = [];
@@ -223,30 +221,69 @@ const MojibakeSimulator = ({ input }) => {
         } else {
             bytes = toSJISArray(input) || [];
         }
-        setSavedBytes(bytes);
 
         // 2. 開くプロセス (バイト列 -> 文字列)
+        let text = '';
         if (bytes.length > 0) {
             try {
-                const decoded = window.Encoding.convert(bytes, {
+                text = window.Encoding.convert(bytes, {
                     to: 'UNICODE',
                     from: openMode,
                     type: 'string'
                 });
-                setResultText(decoded);
             } catch (e) {
-                setResultText('（エラー：変換できませんでした）');
+                text = '（エラー：変換できませんでした）';
             }
-        } else {
-            setResultText('（エラー：保存できませんでした）');
+        } else if (saveMode === 'SJIS' && input.length > 0) {
+            // SJIS変換で空になった＝対応文字がない
+            text = '（Shift-JIS非対応文字）';
         }
 
+        return { savedBytes: bytes, resultText: text };
     }, [input, saveMode, openMode]);
 
-    const isSuccess = saveMode === openMode;
+    // 判定ロジック
+    // status: 'success' | 'lucky' | 'failure'
+    let status = 'failure';
+    if (saveMode === openMode) {
+        status = 'success';
+    } else if (resultText === input) {
+        // 設定は違うが、結果が入力と同じ（ASCII文字など）
+        status = 'lucky';
+    }
+
     const hexString = toHexString(savedBytes);
-    // 表示用バイト列（長すぎる場合は省略）
     const displayHex = hexString.length > 30 ? hexString.substring(0, 30) + "..." : hexString;
+
+    // 表示スタイルの定義
+    const styles = {
+        success: {
+            bg: 'bg-green-50',
+            border: 'border-green-200',
+            text: 'text-green-700',
+            icon: 'fa-check-circle',
+            title: '成功！正しい文字コードを選びました。',
+            desc: null
+        },
+        lucky: {
+            bg: 'bg-blue-50',
+            border: 'border-blue-200',
+            text: 'text-blue-700',
+            icon: 'fa-lightbulb',
+            title: 'おや？文字化けしませんでした！',
+            desc: '設定は合っていませんが、英数字（ASCII文字）はUTF-8でもShift-JISでも同じデータになるため、偶然正しく表示されました。'
+        },
+        failure: {
+            bg: 'bg-red-50',
+            border: 'border-red-200',
+            text: 'text-red-600',
+            icon: 'fa-triangle-exclamation',
+            title: '文字化け発生！',
+            desc: `${saveMode}で保存されたデータ(${savedBytes.length}バイト)を、無理やり${openMode}のルールで読もうとしたため、区切り位置がずれて別の文字になってしまいました。`
+        }
+    };
+
+    const currentStyle = styles[status];
 
     return (
         <Card title="実験室：文字化けを発生させよう" className="border-indigo-100 bg-indigo-50/10">
@@ -331,31 +368,24 @@ const MojibakeSimulator = ({ input }) => {
             </div>
 
             {/* 結果表示エリア */}
-            <div className={`mt-6 rounded-xl p-6 text-center border-2 transition-all duration-500 ${isSuccess ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+            <div className={`mt-6 rounded-xl p-6 text-center border-2 transition-all duration-500 ${currentStyle.bg} ${currentStyle.border}`}>
                 <div className="text-xs font-bold text-slate-500 mb-2 uppercase tracking-wider">画面の表示結果</div>
-                <div className={`text-3xl font-bold font-mono break-all min-h-[3rem] flex items-center justify-center ${isSuccess ? 'text-green-700' : 'text-red-600'}`}>
+                <div className={`text-3xl font-bold font-mono break-all min-h-[3rem] flex items-center justify-center ${currentStyle.text}`}>
                     {resultText}
                 </div>
                 
                 <div className="mt-4 pt-4 border-t border-slate-200/50">
-                    {isSuccess ? (
-                        <p className="text-sm text-green-800 font-bold">
-                            <i className="fa-solid fa-check-circle mr-2"></i>
-                            成功！正しい文字コードを選びました。
+                    <div className={`text-sm ${status === 'failure' ? 'text-red-800' : (status === 'lucky' ? 'text-blue-800' : 'text-green-800')}`}>
+                        <p className="font-bold mb-1">
+                            <i className={`fa-solid ${currentStyle.icon} mr-2`}></i>
+                            {currentStyle.title}
                         </p>
-                    ) : (
-                        <div className="text-sm text-red-800">
-                            <p className="font-bold mb-1">
-                                <i className="fa-solid fa-triangle-exclamation mr-2"></i>
-                                文字化け発生！
+                        {currentStyle.desc && (
+                            <p className="opacity-90">
+                                {currentStyle.desc}
                             </p>
-                            <p className="opacity-80">
-                                {saveMode}で保存されたデータ({savedBytes.length}バイト)を、
-                                無理やり{openMode}のルールで読もうとしたため、
-                                区切り位置がずれて別の文字になってしまいました。
-                            </p>
-                        </div>
-                    )}
+                        )}
+                    </div>
                 </div>
             </div>
         </Card>
