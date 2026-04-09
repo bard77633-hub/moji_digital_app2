@@ -9,7 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@tailwindcss/vite": "^4.0.0-alpha.25",
+    "@tailwindcss/vite": "^4.0.0",
     "autoprefixer": "^10.4.27",
     "clsx": "^2.1.1",
     "encoding-japanese": "^2.2.0",
