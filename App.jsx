@@ -1,141 +1,24 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { createRoot } from 'react-dom/client';
-import { GoogleGenAI } from "@google/genai";
+import { 
+  Code, 
+  Keyboard, 
+  Book, 
+  CheckCircle2, 
+  Lightbulb, 
+  AlertTriangle, 
+  FileDown, 
+  FileUp, 
+  Ban,
+  Globe,
+  Flag,
+  Bug
+} from 'lucide-react';
+import { FONTS } from './constants';
+import { analyzeText, toUTF8Array, toSJISArray, toHexString, toBinaryString } from './utils/encoding';
+import Encoding from 'encoding-japanese';
 
 // ==========================================
-// 1. Constants
-// ==========================================
-
-const API_KEY = (typeof process !== 'undefined' && process.env && process.env.API_KEY) ? process.env.API_KEY : '';
-
-const FONTS = [
-    { name: 'ゴシック体', family: 'font-sans' },
-    { name: '明朝体', family: 'font-serif' },
-    { name: '手書き風', family: 'font-hand' },
-    { name: '等幅', family: 'font-mono' },
-];
-
-// ==========================================
-// 2. Utils
-// ==========================================
-
-const toUTF8Array = (str) => {
-    const encoder = new TextEncoder();
-    return Array.from(encoder.encode(str));
-};
-
-const toSJISArray = (str) => {
-    // ライブラリがロードされているか確認
-    const EncodingLib = window.Encoding;
-    if (!EncodingLib) return null; // ロード前またはエラー
-    
-    try {
-        const unicodeArray = EncodingLib.stringToCode(str);
-        const sjisArray = EncodingLib.convert(unicodeArray, {
-            to: 'SJIS',
-            from: 'UNICODE',
-            type: 'array'
-        });
-        
-        // 逆変換して元の文字に戻るか確認（文字化け/非対応文字の判定）
-        // ※絵文字などはSJISに変換すると '?' (0x3F) 等になったり、不正なバイト列になる
-        const reversed = EncodingLib.convert(sjisArray, {
-            to: 'UNICODE',
-            from: 'SJIS',
-            type: 'string'
-        });
-
-        // 厳密なチェック: 元の文字と異なる、またはSJISで表現できない文字(置換文字など)になった場合
-        if (reversed !== str) {
-             return sjisArray;
-        }
-        return sjisArray;
-    } catch (e) {
-        return null;
-    }
-};
-
-const toHexString = (byteArray) => {
-    if (!byteArray) return "";
-    return byteArray.map(b => b.toString(16).toUpperCase().padStart(2, '0')).join(' ');
-};
-
-const toBinaryString = (byteArray) => {
-    if (!byteArray) return "";
-    return byteArray.map(b => b.toString(2).padStart(8, '0')).join(' ');
-};
-
-const analyzeText = (text) => {
-    if (!text) return [];
-    
-    const chars = Array.from(text);
-    
-    return chars.map((char, index) => {
-        const utf8 = toUTF8Array(char);
-        const sjis = toSJISArray(char);
-        
-        // SJIS判定: ライブラリがない、または変換結果が怪しい場合
-        const isSjisValid = sjis && !(sjis.length === 1 && sjis[0] === 0x3F && char !== '?');
-
-        return {
-            id: index,
-            char: char,
-            codePoint: 'U+' + char.codePointAt(0).toString(16).toUpperCase().padStart(4, '0'),
-            utf8: {
-                bytes: utf8,
-                length: utf8.length,
-                hex: toHexString(utf8),
-                binary: toBinaryString(utf8)
-            },
-            sjis: {
-                bytes: sjis || [],
-                length: isSjisValid ? sjis.length : 0,
-                hex: toHexString(sjis || []),
-                binary: toBinaryString(sjis || []),
-                isValid: isSjisValid
-            }
-        };
-    });
-};
-
-// ==========================================
-// 3. Services
-// ==========================================
-
-let aiClient = null;
-
-const getClient = () => {
-    if (!API_KEY) return null;
-    if (!aiClient) {
-        aiClient = new GoogleGenAI({ apiKey: API_KEY });
-    }
-    return aiClient;
-};
-
-const askAITeacher = async (question, context = "") => {
-    const client = getClient();
-    if (!client) throw new Error("APIキー未設定");
-
-    try {
-        const prompt = `
-        あなたは高校「情報I」の先生です。
-        文脈: ${context}
-        質問: ${question}
-        回答ルール: 300文字以内。専門用語は例え話で解説。フレンドリーに。
-        `;
-        const response = await client.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: prompt,
-        });
-        return response.text;
-    } catch (error) {
-        console.error("Gemini Error:", error);
-        throw new Error("AI先生が応答しませんでした。");
-    }
-};
-
-// ==========================================
-// 4. Components
+// 1. Components
 // ==========================================
 
 const Card = ({ children, className = "", title, headerAction }) => (
@@ -153,7 +36,7 @@ const Card = ({ children, className = "", title, headerAction }) => (
 );
 
 const Button = ({ onClick, children, variant = "primary", className = "", disabled = false }) => {
-    const base = "px-4 py-2 rounded-lg font-medium transition-all duration-200 flex items-center gap-2 justify-center";
+    const base = "px-4 py-2 rounded-lg font-medium transition-all duration-200 flex items-center gap-2 justify-center cursor-pointer";
     const variants = {
         primary: "bg-brand-600 text-white hover:bg-brand-500 shadow-md shadow-brand-500/20 disabled:opacity-50 disabled:cursor-not-allowed",
         secondary: "bg-white text-slate-700 border border-slate-300 hover:bg-slate-50 hover:text-brand-600",
@@ -207,14 +90,12 @@ const HexBadge = ({ hex }) => (
 );
 
 const MojibakeSimulator = ({ input }) => {
-    const [saveMode, setSaveMode] = useState('UTF8'); // 'UTF8' | 'SJIS'
-    const [openMode, setOpenMode] = useState('SJIS'); // 'UTF8' | 'SJIS'
+    const [saveMode, setSaveMode] = useState('UTF8');
+    const [openMode, setOpenMode] = useState('SJIS');
 
-    // シミュレーション結果の計算（レンダリング時に同期的に処理）
     const { savedBytes, resultText } = useMemo(() => {
-        if (!input || !window.Encoding) return { savedBytes: [], resultText: '' };
+        if (!input) return { savedBytes: [], resultText: '' };
 
-        // 1. 保存プロセス (文字列 -> バイト列)
         let bytes = [];
         if (saveMode === 'UTF8') {
             bytes = toUTF8Array(input);
@@ -222,11 +103,10 @@ const MojibakeSimulator = ({ input }) => {
             bytes = toSJISArray(input) || [];
         }
 
-        // 2. 開くプロセス (バイト列 -> 文字列)
         let text = '';
         if (bytes.length > 0) {
             try {
-                text = window.Encoding.convert(bytes, {
+                text = Encoding.convert(bytes, {
                     to: 'UNICODE',
                     from: openMode,
                     type: 'string'
@@ -235,33 +115,28 @@ const MojibakeSimulator = ({ input }) => {
                 text = '（エラー：変換できませんでした）';
             }
         } else if (saveMode === 'SJIS' && input.length > 0) {
-            // SJIS変換で空になった＝対応文字がない
             text = '（Shift-JIS非対応文字）';
         }
 
         return { savedBytes: bytes, resultText: text };
     }, [input, saveMode, openMode]);
 
-    // 判定ロジック
-    // status: 'success' | 'lucky' | 'failure'
     let status = 'failure';
     if (saveMode === openMode) {
         status = 'success';
     } else if (resultText === input) {
-        // 設定は違うが、結果が入力と同じ（ASCII文字など）
         status = 'lucky';
     }
 
     const hexString = toHexString(savedBytes);
     const displayHex = hexString.length > 30 ? hexString.substring(0, 30) + "..." : hexString;
 
-    // 表示スタイルの定義
     const styles = {
         success: {
             bg: 'bg-green-50',
             border: 'border-green-200',
             text: 'text-green-700',
-            icon: 'fa-check-circle',
+            icon: <CheckCircle2 className="w-5 h-5 mr-2" />,
             title: '成功！正しい文字コードを選びました。',
             desc: null
         },
@@ -269,7 +144,7 @@ const MojibakeSimulator = ({ input }) => {
             bg: 'bg-blue-50',
             border: 'border-blue-200',
             text: 'text-blue-700',
-            icon: 'fa-lightbulb',
+            icon: <Lightbulb className="w-5 h-5 mr-2" />,
             title: 'おや？文字化けしませんでした！',
             desc: '設定は合っていませんが、英数字（ASCII文字）はUTF-8でもShift-JISでも同じデータになるため、偶然正しく表示されました。'
         },
@@ -277,7 +152,7 @@ const MojibakeSimulator = ({ input }) => {
             bg: 'bg-red-50',
             border: 'border-red-200',
             text: 'text-red-600',
-            icon: 'fa-triangle-exclamation',
+            icon: <AlertTriangle className="w-5 h-5 mr-2" />,
             title: '文字化け発生！',
             desc: `${saveMode}で保存されたデータ(${savedBytes.length}バイト)を、無理やり${openMode}のルールで読もうとしたため、区切り位置がずれて別の文字になってしまいました。`
         }
@@ -295,8 +170,6 @@ const MojibakeSimulator = ({ input }) => {
             </div>
 
             <div className="flex flex-col lg:flex-row gap-4 items-stretch justify-center">
-                
-                {/* STEP 1: 保存 */}
                 <div className="flex-1 bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col">
                     <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">STEP 1. 保存</div>
                     <div className="flex-1 flex flex-col justify-center gap-3">
@@ -304,7 +177,7 @@ const MojibakeSimulator = ({ input }) => {
                         <div className="flex gap-2">
                             <button 
                                 onClick={() => setSaveMode('UTF8')}
-                                className={`flex-1 py-2 px-3 rounded-lg text-sm font-bold transition-all border-2
+                                className={`flex-1 py-2 px-3 rounded-lg text-sm font-bold transition-all border-2 cursor-pointer
                                     ${saveMode === 'UTF8' 
                                         ? 'border-brand-500 bg-brand-50 text-brand-700' 
                                         : 'border-slate-100 bg-slate-50 text-slate-500 hover:bg-white hover:border-slate-300'}
@@ -314,7 +187,7 @@ const MojibakeSimulator = ({ input }) => {
                             </button>
                             <button 
                                 onClick={() => setSaveMode('SJIS')}
-                                className={`flex-1 py-2 px-3 rounded-lg text-sm font-bold transition-all border-2
+                                className={`flex-1 py-2 px-3 rounded-lg text-sm font-bold transition-all border-2 cursor-pointer
                                     ${saveMode === 'SJIS' 
                                         ? 'border-orange-500 bg-orange-50 text-orange-700' 
                                         : 'border-slate-100 bg-slate-50 text-slate-500 hover:bg-white hover:border-slate-300'}
@@ -326,17 +199,15 @@ const MojibakeSimulator = ({ input }) => {
                     </div>
                 </div>
 
-                {/* 矢印 & データ */}
                 <div className="flex flex-col items-center justify-center gap-1 text-slate-400 px-2">
-                    <i className="fa-solid fa-file-arrow-down text-xl"></i>
+                    <FileDown className="w-6 h-6" />
                     <div className="bg-slate-800 text-yellow-400 font-mono text-[10px] px-2 py-1 rounded shadow-sm max-w-[120px] overflow-hidden text-center whitespace-nowrap">
                         {displayHex || "00 00..."}
                     </div>
                     <div className="text-[10px] text-slate-500">ファイル(バイト列)</div>
-                    <i className="fa-solid fa-file-arrow-up text-xl mt-1"></i>
+                    <FileUp className="w-6 h-6 mt-1" />
                 </div>
 
-                {/* STEP 2: 開く */}
                 <div className="flex-1 bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col">
                     <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">STEP 2. 表示</div>
                     <div className="flex-1 flex flex-col justify-center gap-3">
@@ -344,7 +215,7 @@ const MojibakeSimulator = ({ input }) => {
                         <div className="flex gap-2">
                             <button 
                                 onClick={() => setOpenMode('UTF8')}
-                                className={`flex-1 py-2 px-3 rounded-lg text-sm font-bold transition-all border-2
+                                className={`flex-1 py-2 px-3 rounded-lg text-sm font-bold transition-all border-2 cursor-pointer
                                     ${openMode === 'UTF8' 
                                         ? 'border-brand-500 bg-brand-50 text-brand-700' 
                                         : 'border-slate-100 bg-slate-50 text-slate-500 hover:bg-white hover:border-slate-300'}
@@ -354,7 +225,7 @@ const MojibakeSimulator = ({ input }) => {
                             </button>
                             <button 
                                 onClick={() => setOpenMode('SJIS')}
-                                className={`flex-1 py-2 px-3 rounded-lg text-sm font-bold transition-all border-2
+                                className={`flex-1 py-2 px-3 rounded-lg text-sm font-bold transition-all border-2 cursor-pointer
                                     ${openMode === 'SJIS' 
                                         ? 'border-orange-500 bg-orange-50 text-orange-700' 
                                         : 'border-slate-100 bg-slate-50 text-slate-500 hover:bg-white hover:border-slate-300'}
@@ -367,7 +238,6 @@ const MojibakeSimulator = ({ input }) => {
                 </div>
             </div>
 
-            {/* 結果表示エリア */}
             <div className={`mt-6 rounded-xl p-6 text-center border-2 transition-all duration-500 ${currentStyle.bg} ${currentStyle.border}`}>
                 <div className="text-xs font-bold text-slate-500 mb-2 uppercase tracking-wider">画面の表示結果</div>
                 <div className={`text-3xl font-bold font-mono break-all min-h-[3rem] flex items-center justify-center ${currentStyle.text}`}>
@@ -376,10 +246,10 @@ const MojibakeSimulator = ({ input }) => {
                 
                 <div className="mt-4 pt-4 border-t border-slate-200/50">
                     <div className={`text-sm ${status === 'failure' ? 'text-red-800' : (status === 'lucky' ? 'text-blue-800' : 'text-green-800')}`}>
-                        <p className="font-bold mb-1">
-                            <i className={`fa-solid ${currentStyle.icon} mr-2`}></i>
+                        <div className="flex items-center justify-center font-bold mb-1">
+                            {currentStyle.icon}
                             {currentStyle.title}
-                        </p>
+                        </div>
                         {currentStyle.desc && (
                             <p className="opacity-90">
                                 {currentStyle.desc}
@@ -393,7 +263,7 @@ const MojibakeSimulator = ({ input }) => {
 };
 
 // ==========================================
-// 5. Main Application Logic
+// 3. Main Application Logic
 // ==========================================
 
 const App = () => {
@@ -405,14 +275,14 @@ const App = () => {
                 <div className="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
                     <div className="flex items-center gap-3">
                         <div className="w-8 h-8 bg-brand-600 rounded-lg flex items-center justify-center text-white font-bold text-lg shadow-lg shadow-brand-500/30">
-                            <i className="fa-solid fa-code"></i>
+                            <Code className="w-5 h-5" />
                         </div>
                         <h1 className="font-bold text-xl tracking-tight text-slate-800">デジ文字ラボ</h1>
                     </div>
                     
                     <nav className="flex gap-1">
-                        <NavButton active={view === 'converter'} onClick={() => setView('converter')} icon="fa-keyboard">ラボ</NavButton>
-                        <NavButton active={view === 'about'} onClick={() => setView('about')} icon="fa-book">解説</NavButton>
+                        <NavButton active={view === 'converter'} onClick={() => setView('converter')} icon={<Keyboard className="w-4 h-4" />}>ラボ</NavButton>
+                        <NavButton active={view === 'about'} onClick={() => setView('about')} icon={<Book className="w-4 h-4" />}>解説</NavButton>
                     </nav>
                 </div>
             </header>
@@ -429,13 +299,13 @@ const NavButton = ({ active, onClick, icon, children }) => (
     <button 
         onClick={onClick}
         className={`
-            px-3 py-2 rounded-lg text-sm font-bold transition-colors flex items-center gap-2
+            px-3 py-2 rounded-lg text-sm font-bold transition-colors flex items-center gap-2 cursor-pointer
             ${active 
                 ? 'bg-brand-50 text-brand-700' 
                 : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'}
         `}
     >
-        <i className={`fa-solid ${icon}`}></i>
+        {icon}
         <span className="hidden sm:inline">{children}</span>
     </button>
 );
@@ -449,7 +319,8 @@ const ConverterView = () => {
     const [selectedFont, setSelectedFont] = useState(FONTS[0]);
 
     useEffect(() => {
-        setAnalysis(analyzeText(input));
+        const result = analyzeText(input);
+        setAnalysis(result);
         if (input.length === 0) setSelectedIndex(-1);
         else if (selectedIndex >= input.length) setSelectedIndex(0);
         else if (selectedIndex === -1 && input.length > 0) setSelectedIndex(0);
@@ -457,14 +328,12 @@ const ConverterView = () => {
 
     const selectedCharData = analysis[selectedIndex];
 
-    // 全体のバイト数計算
     const totalUtf8 = analysis.reduce((acc, item) => acc + item.utf8.length, 0);
     const totalSjis = analysis.reduce((acc, item) => acc + item.sjis.length, 0);
     const canFullSjis = analysis.every(item => item.sjis.isValid);
 
     return (
-        <div className="space-y-6 animate-[fadeIn_0.5s_ease-out]">
-            {/* Input Area */}
+        <div className="space-y-6">
             <Card className="border-brand-100 shadow-md">
                 <div className="flex flex-col md:flex-row gap-4 items-center">
                     <div className="flex-1 w-full relative">
@@ -481,7 +350,6 @@ const ConverterView = () => {
                             {input.length}/10
                         </div>
                     </div>
-                    {/* Data Size Comparison Badge */}
                     {input.length > 0 && (
                         <div className="flex-shrink-0 flex gap-4 bg-slate-50 p-3 rounded-lg border border-slate-200">
                             <div className="text-center">
@@ -500,7 +368,7 @@ const ConverterView = () => {
                 </div>
                 {!canFullSjis && input.length > 0 && (
                     <div className="mt-2 text-xs text-red-500 flex items-center gap-1">
-                        <i className="fa-solid fa-triangle-exclamation"></i>
+                        <AlertTriangle className="w-3 h-3" />
                         一部の文字はShift-JISで表現できないため、正しいバイト数になりません。
                     </div>
                 )}
@@ -508,10 +376,7 @@ const ConverterView = () => {
 
             {input.length > 0 ? (
                 <div className="grid lg:grid-cols-3 gap-6">
-                    {/* Left Column: Selector & Details */}
                     <div className="lg:col-span-2 space-y-6">
-                        
-                        {/* Character Selector (Horizontal Scroll) */}
                         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
                             <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">文字を選択して詳細を確認</h3>
                             <div className="flex gap-2 overflow-x-auto pb-2 custom-scrollbar">
@@ -520,7 +385,7 @@ const ConverterView = () => {
                                         key={idx}
                                         onClick={() => setSelectedIndex(idx)}
                                         className={`
-                                            flex-shrink-0 w-12 h-14 rounded-lg flex flex-col items-center justify-center transition-all border-2
+                                            flex-shrink-0 w-12 h-14 rounded-lg flex flex-col items-center justify-center transition-all border-2 cursor-pointer
                                             ${selectedIndex === idx 
                                                 ? 'border-brand-500 bg-brand-50 text-brand-700 shadow-md scale-105' 
                                                 : 'border-slate-100 bg-slate-50 text-slate-600 hover:border-brand-200 hover:bg-white'}
@@ -533,7 +398,6 @@ const ConverterView = () => {
                             </div>
                         </div>
 
-                        {/* Selected Character Detail */}
                         {selectedCharData && (
                             <CharacterDetailCard 
                                 item={selectedCharData} 
@@ -542,7 +406,6 @@ const ConverterView = () => {
                         )}
                     </div>
 
-                    {/* Right Column: Tools & AI */}
                     <div className="space-y-6">
                         <Card title="フォント比較">
                             <div className="space-y-2">
@@ -550,7 +413,7 @@ const ConverterView = () => {
                                     <button
                                         key={font.name}
                                         onClick={() => setSelectedFont(font)}
-                                        className={`w-full text-left px-3 py-2 rounded-lg border transition-all flex items-center justify-between group
+                                        className={`w-full text-left px-3 py-2 rounded-lg border transition-all flex items-center justify-between group cursor-pointer
                                             ${selectedFont.name === font.name 
                                                 ? 'bg-brand-50 border-brand-200 ring-1 ring-brand-500/30' 
                                                 : 'bg-white border-slate-200 hover:border-brand-300'}
@@ -562,18 +425,15 @@ const ConverterView = () => {
                                 ))}
                             </div>
                         </Card>
-
-                        <AITutorPanel input={input} selectedChar={selectedCharData?.char} />
                     </div>
                     
-                    {/* Mojibake Simulator (Full width at bottom) */}
                     <div className="lg:col-span-3">
                         <MojibakeSimulator input={input} />
                     </div>
                 </div>
             ) : (
                 <div className="text-center py-20 text-slate-400">
-                    <i className="fa-solid fa-keyboard text-4xl mb-4 text-slate-300"></i>
+                    <Keyboard className="w-12 h-12 mx-auto mb-4 text-slate-300" />
                     <p>文字を入力して分析を開始しましょう</p>
                 </div>
             )}
@@ -582,9 +442,8 @@ const ConverterView = () => {
 };
 
 const CharacterDetailCard = ({ item, fontClass }) => (
-    <div className="bg-white rounded-xl shadow-lg border border-slate-200 overflow-hidden animate-[fadeIn_0.3s]">
+    <div className="bg-white rounded-xl shadow-lg border border-slate-200 overflow-hidden">
         <div className="flex flex-col sm:flex-row">
-            {/* Visual */}
             <div className="sm:w-1/3 bg-slate-50 p-8 flex flex-col items-center justify-center border-b sm:border-b-0 sm:border-r border-slate-100">
                 <span className={`text-8xl text-slate-800 ${fontClass} leading-none drop-shadow-sm`}>{item.char}</span>
                 <span className="mt-6 font-mono text-sm text-slate-500 bg-white px-3 py-1 rounded-full border border-slate-200 shadow-sm">
@@ -592,9 +451,7 @@ const CharacterDetailCard = ({ item, fontClass }) => (
                 </span>
             </div>
 
-            {/* Data */}
             <div className="sm:w-2/3 p-6 space-y-8">
-                {/* UTF-8 */}
                 <div>
                     <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center gap-2">
@@ -614,7 +471,6 @@ const CharacterDetailCard = ({ item, fontClass }) => (
                     </div>
                 </div>
 
-                {/* SJIS */}
                 <div>
                     <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center gap-2">
@@ -643,7 +499,7 @@ const CharacterDetailCard = ({ item, fontClass }) => (
                     ) : (
                         <div className="bg-slate-100 rounded-lg p-4 text-center border-2 border-dashed border-slate-300">
                             <p className="text-xs text-slate-500">
-                                <i className="fa-solid fa-ban mr-1"></i>
+                                <Ban className="w-4 h-4 inline mr-1" />
                                 この文字（{item.char}）はShift-JISの文字コード表に存在しません。
                             </p>
                         </div>
@@ -654,91 +510,27 @@ const CharacterDetailCard = ({ item, fontClass }) => (
     </div>
 );
 
-const AITutorPanel = ({ input, selectedChar }) => {
-    const [question, setQuestion] = useState('');
-    const [answer, setAnswer] = useState('');
-    const [loading, setLoading] = useState(false);
-
-    // AIへの質問コンテキストを動的に生成
-    const context = useMemo(() => {
-        return `現在、生徒は「${input}」という文字列を分析中。
-        特に「${selectedChar || input[0]}」という文字の詳細画面を見ている。`;
-    }, [input, selectedChar]);
-
-    const handleAsk = async () => {
-        if (!question.trim()) return;
-        setLoading(true);
-        try {
-            const response = await askAITeacher(question, context);
-            setAnswer(response);
-        } catch (e) {
-            setAnswer("通信エラーが発生しました。");
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    if (!API_KEY) return null;
-
-    return (
-        <Card title="AI先生に質問" className="bg-gradient-to-br from-indigo-50 to-blue-50 border-indigo-100">
-            <div className="space-y-3">
-                <div className="flex gap-2 mb-2">
-                    <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-indigo-600 shadow-sm">
-                        <i className="fa-solid fa-robot"></i>
-                    </div>
-                    <div className="text-xs text-indigo-800 font-medium pt-1 leading-snug">
-                        「なぜShift-JISだとバイト数が少ないの？」「文字化けって何？」など聞いてみてね。
-                    </div>
-                </div>
-                
-                <textarea 
-                    value={question}
-                    onChange={(e) => setQuestion(e.target.value)}
-                    placeholder="質問を入力..."
-                    className="w-full p-3 rounded-lg border border-indigo-200 text-sm focus:ring-2 focus:ring-indigo-400 outline-none bg-white/80"
-                    rows="2"
-                />
-                
-                <Button 
-                    onClick={handleAsk} 
-                    disabled={loading || !question} 
-                    className="w-full text-sm bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-200"
-                >
-                    {loading ? <i className="fa-solid fa-spinner fa-spin"></i> : <><i className="fa-solid fa-paper-plane"></i> 質問する</>}
-                </Button>
-
-                {answer && (
-                    <div className="mt-3 p-3 bg-white rounded-lg border border-indigo-100 text-sm text-slate-700 leading-relaxed animate-[fadeIn_0.3s] shadow-sm">
-                        {answer}
-                    </div>
-                )}
-            </div>
-        </Card>
-    );
-};
-
 // --- About View ---
 
 const AboutView = () => (
-    <div className="max-w-3xl mx-auto space-y-8 animate-[fadeIn_0.5s]">
+    <div className="max-w-3xl mx-auto space-y-8">
         <div className="text-center mb-8">
             <h2 className="text-2xl font-bold text-slate-800">文字のデジタル化の仕組み</h2>
             <p className="text-slate-500 mt-2">コンピュータが文字を扱う「裏側」を見てみよう</p>
         </div>
         
-        <TopicSection title="1. 文字コードとは？" icon="fa-list-ol" color="text-brand-500">
+        <TopicSection title="1. 文字コードとは？" icon={<Keyboard className="w-5 h-5" />} color="text-brand-500">
             <p>
                 コンピュータは「0」と「1」しか理解できません。そこで、「あ」は「12354」、「A」は「65」のように、
                 <strong>文字と番号の対応表</strong>を決めておく必要があります。これを「文字コード」と呼びます。
             </p>
         </TopicSection>
 
-        <TopicSection title="2. なぜUTF-8とShift-JISがあるの？" icon="fa-right-left" color="text-orange-500">
+        <TopicSection title="2. なぜUTF-8とShift-JISがあるの？" icon={<Globe className="w-5 h-5" />} color="text-orange-500">
             <div className="grid md:grid-cols-2 gap-6 mt-4">
                 <div className="bg-blue-50 p-5 rounded-xl border border-blue-100">
                     <h4 className="font-bold text-blue-800 mb-2 flex items-center gap-2">
-                        <i className="fa-solid fa-globe"></i> UTF-8
+                        <Globe className="w-4 h-4" /> UTF-8
                     </h4>
                     <ul className="text-sm text-blue-900 space-y-2 list-disc list-inside">
                         <li><strong>世界標準</strong>。どの国の言葉も混在できる。</li>
@@ -748,7 +540,7 @@ const AboutView = () => (
                 </div>
                 <div className="bg-orange-50 p-5 rounded-xl border border-orange-100">
                     <h4 className="font-bold text-orange-800 mb-2 flex items-center gap-2">
-                        <i className="fa-solid fa-flag"></i> Shift-JIS
+                        <Flag className="w-4 h-4" /> Shift-JIS
                     </h4>
                     <ul className="text-sm text-orange-900 space-y-2 list-disc list-inside">
                         <li><strong>日本独自</strong>。昔のWindowsで標準だった。</li>
@@ -759,7 +551,7 @@ const AboutView = () => (
             </div>
         </TopicSection>
 
-        <TopicSection title="3. 文字化けの原因" icon="fa-bug" color="text-red-500">
+        <TopicSection title="3. 文字化けの原因" icon={<Bug className="w-5 h-5" />} color="text-red-500">
             <p className="mb-4">
                 「UTF-8」で書かれたデータを、「Shift-JIS」のルールで読もうとすると、
                 ビットの区切り位置がずれてしまい、全く違う文字（意味不明な記号）になります。
@@ -777,7 +569,7 @@ const TopicSection = ({ title, icon, color, children }) => (
     <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
         <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-3 border-b border-slate-100 pb-2">
             <div className={`w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center ${color}`}>
-                <i className={`fa-solid ${icon}`}></i>
+                {icon}
             </div>
             {title}
         </h3>
@@ -787,5 +579,4 @@ const TopicSection = ({ title, icon, color, children }) => (
     </div>
 );
 
-const root = createRoot(document.getElementById('root'));
-root.render(<App />);
+export default App;

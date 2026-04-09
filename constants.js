@@ -1,8 +1,3 @@
-// 定数定義
-// 授業で使用する際は、ここにAPIキーを設定してください。
-// セキュリティ上の理由から、GitHub等の公開リポジトリにAPIキーを含めたままアップロードしないでください。
-export const API_KEY = ""; 
-
 export const FONTS = [
     { name: 'ゴシック体', family: 'font-sans' },
     { name: '明朝体', family: 'font-serif' },

@@ -5,98 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>デジ文字ラボ - 文字のデジタル化</title>
     
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        brand: {
-                            50: '#f0f9ff',
-                            100: '#e0f2fe',
-                            500: '#0ea5e9',
-                            600: '#0284c7',
-                            900: '#0c4a6e',
-                        }
-                    },
-                    fontFamily: {
-                        mono: ['Menlo', 'Monaco', 'Consolas', '"Liberation Mono"', '"Courier New"', 'monospace'],
-                        sans: ['"Inter"', '"Noto Sans JP"', 'sans-serif'],
-                        serif: ['"Noto Serif JP"', 'serif'],
-                        hand: ['"Yomogi"', 'cursive'],
-                    }
-                }
-            }
-        }
-    </script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Noto+Sans+JP:wght@400;500;700&family=Noto+Serif+JP:wght@400;700&family=Yomogi&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-
-    <!-- Shift-JIS Encoding Library -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/encoding-japanese/2.0.0/encoding.min.js"></script>
-
-    <!-- React 19 & Babel -->
-    <script type="importmap">
-{
-  "imports": {
-    "react": "https://esm.sh/react@19.0.0?dev",
-    "react-dom/client": "https://esm.sh/react-dom@19.0.0/client?dev",
-    "@google/genai": "https://esm.sh/@google/genai",
-    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.1/"
-  }
-}
-</script>
-    <!-- Babel Standalone -->
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    
-    <style>
-        body {
-            font-family: 'Noto Sans JP', sans-serif;
-            background-color: #f8fafc;
-        }
-        /* Custom Scrollbar for horizontal scrolling areas */
-        .custom-scrollbar::-webkit-scrollbar {
-            height: 8px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-track {
-            background: #f1f5f9;
-            border-radius: 4px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-            background: #cbd5e1;
-            border-radius: 4px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-            background: #94a3b8;
-        }
-        #error-display {
-            display: none;
-            padding: 20px;
-            background: #fee2e2;
-            color: #991b1b;
-            border: 1px solid #f87171;
-            margin: 20px;
-            border-radius: 8px;
-            font-family: monospace;
-        }
-    </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Noto+Sans+JP:wght@400;500;700&family=Noto+Serif+JP:wght@400;700&family=Yomogi&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
 </head>
 <body>
     <div id="root"></div>
-    <div id="error-display"></div>
-
-    <!-- Error Handler -->
-    <script>
-        window.addEventListener('error', function(e) {
-            const errorDiv = document.getElementById('error-display');
-            errorDiv.style.display = 'block';
-            errorDiv.innerText = 'Application Error: ' + e.message;
-            console.error(e);
-        });
-    </script>
-
-    <!-- Main Application Logic -->
-    <script type="text/babel" data-type="module" src="./app.js"></script>
+    <script type="module" src="/index.jsx"></script>
 </body>
 </html>
