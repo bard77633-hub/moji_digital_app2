@@ -11,10 +11,12 @@ import {
   Ban,
   Globe,
   Flag,
-  Bug
+  Bug,
+  Table,
+  ArrowRight
 } from 'lucide-react';
 import { FONTS } from './constants';
-import { analyzeText, toUTF8Array, toSJISArray, toHexString, toBinaryString } from './utils/encoding';
+import { analyzeText, toUTF8Array, toSJISArray, toHexString, toBinaryString, getCodeTableComparison } from './utils/encoding';
 import Encoding from 'encoding-japanese';
 
 // ==========================================
@@ -89,6 +91,158 @@ const HexBadge = ({ hex }) => (
     </span>
 );
 
+const CodeTableComparisonView = ({ comparison }) => {
+    if (!comparison || !comparison.saveTable) return null;
+
+    const { firstChar, saveMode, openMode, saveTable, openTable } = comparison;
+    const isMatched = saveMode === openMode;
+
+    const renderTableGrid = (tableData, isReadSide = false) => {
+        if (!tableData) return null;
+        if (tableData.isInvalidLead) {
+            return (
+                <div className="p-4 rounded-lg bg-red-50/80 border border-red-200 text-xs text-red-700 flex flex-col gap-2 min-h-[104px] justify-center">
+                    <div className="flex items-center font-bold text-red-800">
+                        <AlertTriangle className="w-4 h-4 mr-1.5 shrink-0" />
+                        <span>UTF-8で該当する文字がありません</span>
+                    </div>
+                    <p className="leading-relaxed">{tableData.invalidReason}</p>
+                </div>
+            );
+        }
+
+        return (
+            <div className="flex flex-col gap-2">
+                <div className="overflow-x-auto pb-1">
+                    <div className="min-w-[280px] flex flex-col gap-1.5">
+                        {tableData.rows.map((row, rowIdx) => (
+                            <div key={rowIdx} className="grid grid-cols-8 gap-1">
+                                {row.map((cell, colIdx) => {
+                                    let cellStyle = 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100';
+                                    if (!cell.isValid) {
+                                        cellStyle = 'bg-slate-100/50 border-slate-200/40 text-slate-300';
+                                    }
+                                    if (cell.isTarget) {
+                                        if (isReadSide && !isMatched) {
+                                            cellStyle = 'bg-red-600 border-red-700 text-white font-bold ring-2 ring-red-300 shadow-sm scale-105 z-10';
+                                        } else {
+                                            cellStyle = 'bg-brand-600 border-brand-700 text-white font-bold ring-2 ring-brand-300 shadow-sm scale-105 z-10';
+                                        }
+                                    }
+
+                                    return (
+                                        <div 
+                                            key={colIdx}
+                                            className={`flex flex-col items-center justify-center p-1 rounded-md border text-center transition-all ${cellStyle}`}
+                                            title={`バイト: ${cell.fullHex} → 文字: ${cell.char}`}
+                                        >
+                                            <span className={`text-[9px] font-mono leading-none mb-0.5 ${cell.isTarget ? 'text-white/90' : 'text-slate-400'}`}>
+                                                {cell.shortHex}
+                                            </span>
+                                            <span className={`text-xs leading-none font-sans truncate max-w-full ${cell.isTarget ? 'font-bold' : ''}`}>
+                                                {cell.char}
+                                            </span>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+                {tableData.startRangeHex && (
+                    <div className="flex justify-between items-center text-[10px] text-slate-400 font-mono px-1">
+                        <span>開始: {tableData.startRangeHex}</span>
+                        <span>終了: {tableData.endRangeHex}</span>
+                    </div>
+                )}
+            </div>
+        );
+    };
+
+    return (
+        <div className="mt-6 pt-6 border-t border-indigo-100">
+            <div className="flex items-center gap-2 mb-2">
+                <Table className="w-4 h-4 text-indigo-600" />
+                <h4 className="text-sm font-bold text-slate-700">
+                    文字コード表の比較（1文字目「{firstChar}」のバイト列と参照先）
+                </h4>
+            </div>
+            <p className="text-xs text-slate-500 mb-4 leading-relaxed">
+                コンピュータはファイル内のバイト列（数値）を見て、指定された文字コード表の該当位置から文字を引き出します。
+                文字コード表が異なると、同じバイト列が全く別のマスを指してしまうことが確認できます。
+            </p>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {/* 保存時の文字コード表 */}
+                <div className="bg-white rounded-xl border border-slate-200 p-3.5 shadow-sm flex flex-col justify-between">
+                    <div>
+                        <div className="flex items-center justify-between gap-2 mb-2">
+                            <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                                <span className={`w-2 h-2 rounded-full ${saveMode === 'UTF8' ? 'bg-brand-500' : 'bg-orange-500'}`}></span>
+                                ① 保存側 ({saveTable.title})
+                            </span>
+                            <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-semibold border border-slate-200">
+                                バイト: {saveTable.matchedBytes}
+                            </span>
+                        </div>
+                        <div className="text-xs text-slate-600 mb-3 bg-slate-50 p-2 rounded-lg border border-slate-100">
+                            「{firstChar}」は {saveTable.encoding} のコード表で <span className="font-bold text-brand-600 font-mono">[{saveTable.matchedBytes}]</span> の位置に定義されています。
+                        </div>
+                        {renderTableGrid(saveTable, false)}
+                    </div>
+                    <div className="mt-3 text-[11px] text-brand-700 font-bold text-center bg-brand-50/70 py-1.5 rounded-lg border border-brand-100">
+                        保存位置:「{firstChar}」★
+                    </div>
+                </div>
+
+                {/* 読込時の文字コード表 */}
+                <div className="bg-white rounded-xl border border-slate-200 p-3.5 shadow-sm flex flex-col justify-between">
+                    <div>
+                        <div className="flex items-center justify-between gap-2 mb-2">
+                            <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                                <span className={`w-2 h-2 rounded-full ${openMode === 'UTF8' ? 'bg-brand-500' : 'bg-orange-500'}`}></span>
+                                ② 読込側 ({openTable?.title || `${openMode} コード表`})
+                            </span>
+                            {openTable && !openTable.isInvalidLead && (
+                                <span className={`text-[11px] font-mono px-2 py-0.5 rounded font-semibold border ${
+                                    isMatched ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'
+                                }`}>
+                                    読込バイト: {openTable.readBytes}
+                                </span>
+                            )}
+                        </div>
+                        <div className={`text-xs mb-3 p-2 rounded-lg border ${
+                            isMatched 
+                                ? 'bg-green-50/80 text-green-800 border-green-100' 
+                                : 'bg-red-50/80 text-red-800 border-red-100'
+                        }`}>
+                            {openTable?.statusDesc ? (
+                                <span>{openTable.statusDesc} → 結果: <span className="font-bold text-red-600 font-mono">「{openTable.resultChar}」</span></span>
+                            ) : (
+                                openTable?.isInvalidLead ? (
+                                    <span>{openMode}の文字コード表には、このバイトで始まる文字がありません。</span>
+                                ) : (
+                                    <span>同じ文字コード表で読み取ったため、正しく「{firstChar}」の位置を参照します。</span>
+                                )
+                            )}
+                        </div>
+                        {renderTableGrid(openTable, true)}
+                    </div>
+                    {openTable && !openTable.isInvalidLead && (
+                        <div className={`mt-3 text-[11px] font-bold text-center py-1.5 rounded-lg border ${
+                            isMatched 
+                                ? 'text-green-700 bg-green-50 border-green-200' 
+                                : 'text-red-700 bg-red-50 border-red-200'
+                        }`}>
+                            {isMatched ? `読込位置:「${firstChar}」(一致！)` : `読込位置:「${openTable.resultChar}」(化けた文字！)`}
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+};
+
 const MojibakeSimulator = ({ input }) => {
     const [saveMode, setSaveMode] = useState('UTF8');
     const [openMode, setOpenMode] = useState('SJIS');
@@ -119,6 +273,10 @@ const MojibakeSimulator = ({ input }) => {
         }
 
         return { savedBytes: bytes, resultText: text };
+    }, [input, saveMode, openMode]);
+
+    const comparison = useMemo(() => {
+        return getCodeTableComparison(input, saveMode, openMode);
     }, [input, saveMode, openMode]);
 
     let status = 'failure';
@@ -258,6 +416,9 @@ const MojibakeSimulator = ({ input }) => {
                     </div>
                 </div>
             </div>
+
+            {/* 文字コード表の比較抜粋（3行表示） */}
+            {comparison && <CodeTableComparisonView comparison={comparison} />}
         </Card>
     );
 };
